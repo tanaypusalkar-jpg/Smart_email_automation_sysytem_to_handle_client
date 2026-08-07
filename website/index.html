@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Email Automation System — AI-drafted mail, routed like airmail</title>
+<meta name="description" content="An AI email pipeline built with FastAPI, Claude, and a vector-store RAG layer. Classifies, drafts, and sends mail." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="stripe-border" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="wrap topbar__inner">
+    <span class="mark">✉ EAS</span>
+    <nav class="topnav">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#demo">Try it</a>
+      <a href="#stack">Stack</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- HERO -->
+  <section class="hero wrap">
+    <div class="hero__text">
+      <p class="eyebrow">POSTMARKED · FASTAPI + CLAUDE API</p>
+      <h1>Your inbox,<br>drafted before<br>you open it.</h1>
+      <p class="hero__sub">
+        An email automation backend that reads what came in, decides what it means,
+        writes a reply worth sending, and only lets it out the door when you say so.
+      </p>
+      <div class="hero__cta">
+        <a href="#demo" class="btn btn--primary">Try the live demo</a>
+        <a href="#architecture" class="btn btn--ghost">See how it's built</a>
+      </div>
+    </div>
+
+    <div class="hero__panel" aria-label="Simulated processing log">
+      <div class="panel__head">
+        <span class="dot dot--red"></span><span class="dot dot--amber"></span><span class="dot dot--green"></span>
+        <span class="panel__title">pipeline.log</span>
+      </div>
+      <pre class="panel__body" id="terminal"></pre>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section id="pipeline" class="pipeline wrap">
+    <h2 class="section-title">Four stages. One inbox.</h2>
+    <p class="section-sub">Every email that enters this system moves through the same route, in this order.</p>
+
+    <ol class="stages">
+      <li class="stage">
+        <span class="stage__num">01</span>
+        <h3>Received</h3>
+        <p>Subject and body come in — from an inbox, a form, or a manual test call.</p>
+      </li>
+      <li class="stage">
+        <span class="stage__num">02</span>
+        <h3>Classified</h3>
+        <p>Claude reads it and returns category, priority, and sentiment as structured JSON.</p>
+      </li>
+      <li class="stage">
+        <span class="stage__num">03</span>
+        <h3>Drafted</h3>
+        <p>A reply or new email is written, optionally pulling tone and phrasing from similar past templates stored in a vector DB.</p>
+      </li>
+      <li class="stage">
+        <span class="stage__num">04</span>
+        <h3>Sent — or not</h3>
+        <p>Dispatched over SMTP, rate-limited and OAuth-gated, unless dry-run mode is on.</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture" class="architecture">
+    <div class="wrap">
+      <h2 class="section-title section-title--light">What's actually under the hood</h2>
+      <div class="arch-grid">
+        <div class="arch-card">
+          <h3>API layer</h3>
+          <p>FastAPI. Two routers — <code>emails</code> and <code>compose</code> — each with one job. Pydantic models validate every request and response.</p>
+        </div>
+        <div class="arch-card">
+          <h3>Claude service</h3>
+          <p>Every prompt lives in one file. JSON-only responses, retried with exponential backoff, parsed defensively against markdown fences Claude sometimes adds anyway.</p>
+        </div>
+        <div class="arch-card">
+          <h3>RAG layer</h3>
+          <p>A ChromaDB collection stores past templates. New drafts query it for the closest matches before Claude writes a word — real similarity search, not a hardcoded lookup.</p>
+        </div>
+        <div class="arch-card">
+          <h3>Audit log</h3>
+          <p>A SQLite database (SQLAlchemy) logs every classify, compose, and send call — queryable at <code>/logs</code>.</p>
+        </div>
+        <div class="arch-card">
+          <h3>Access control</h3>
+          <p>Sending mail is rate-limited per IP and gated behind Google OAuth once configured — off by default so local dev stays frictionless.</p>
+        </div>
+        <div class="arch-card">
+          <h3>Delivery</h3>
+          <p>SMTP via aiosmtplib. A <code>DRY_RUN</code> flag means you can exercise the entire pipeline, including "sending," without a single real email leaving the building.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEMO -->
+  <section id="demo" class="demo wrap">
+    <h2 class="section-title">Try it against a running instance</h2>
+    <p class="section-sub">
+      This calls a live FastAPI server on <code>http://127.0.0.1:8000</code>. Clone the repo, run
+      <code>uv run uvicorn app.main:app --reload</code>, then use the form below.
+    </p>
+
+    <div class="demo-grid">
+      <form id="demoForm" class="demo-card">
+        <label>Subject
+          <input type="text" id="subject" value="Refund needed — third crash this week" required />
+        </label>
+        <label>Body
+          <textarea id="body" rows="4" required>Your app has crashed on me three times this week and I lost unsaved work. I want a refund or a real fix.</textarea>
+        </label>
+        <button type="submit" class="btn btn--primary">Classify this email</button>
+      </form>
+
+      <div class="demo-card demo-card--output">
+        <p class="output__label">RESPONSE</p>
+        <pre id="output">Waiting for a request…</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- STACK -->
+  <section id="stack" class="stack wrap">
+    <h2 class="section-title">Built with</h2>
+    <ul class="chips">
+      <li>FastAPI</li>
+      <li>Claude API (Anthropic)</li>
+      <li>ChromaDB</li>
+      <li>SQLAlchemy</li>
+      <li>slowapi</li>
+      <li>Google OAuth</li>
+      <li>Pydantic v2</li>
+      <li>aiosmtplib</li>
+      <li>Docker</li>
+      <li>uv</li>
+      <li>pytest</li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__inner">
+    <span>Email Automation System — built by Tanay</span>
+    <span class="footer__note">Source in <code>/app</code>. Read the README before you send anything for real.</span>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

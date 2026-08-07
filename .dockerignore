@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+app/data/chroma_store/
+app/data/*.db
+.git/
+.gitignore
+*.zip
+website/

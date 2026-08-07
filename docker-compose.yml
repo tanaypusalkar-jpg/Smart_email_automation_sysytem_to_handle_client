@@ -1,0 +1,22 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist the SQLite DB and Chroma store across container restarts.
+      - ./app/data:/app/app/data
+    restart: unless-stopped
+
+  website:
+    image: python:3.12-slim
+    working_dir: /site
+    volumes:
+      - ./website:/site
+    command: python -m http.server 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api

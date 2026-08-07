@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: email-automation-system
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: DRY_RUN
+        value: "true"
+      - key: DATABASE_URL
+        value: "sqlite:///./app/data/emails.db"
+    # `sync: false` means "set this manually in the Render dashboard, don't
+    # store it in this committed file." Never change these to hardcoded
+    # values here - this file is version-controlled.
