@@ -8,8 +8,16 @@ copy-pasted into every router.
 
 import json
 import logging
-from anthropic import Anthropic, APIError
-from tenacity import retry, stop_after_attempt, wait_exponential
+from anthropic import (
+    Anthropic,
+    APIConnectionError,
+    APIError,
+    APIStatusError,
+    InternalServerError,
+    RateLimitError,
+)
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 from app.config import get_settings
 
 logger = logging.getLogger("email_automation.claude")
@@ -29,9 +37,14 @@ def get_client() -> Anthropic:
     return _client
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+    retry=retry_if_exception_type((RateLimitError, APIConnectionError, InternalServerError)),
+    reraise=True,
+)
 def _call_claude(system: str, user_message: str, max_tokens: int = 1024) -> str:
-    """Single point of contact with the API. Retries on transient failures."""
+    """Single point of contact with the API. Retries only on transient failures."""
     client = get_client()
     try:
         response = client.messages.create(
@@ -40,6 +53,9 @@ def _call_claude(system: str, user_message: str, max_tokens: int = 1024) -> str:
             system=system,
             messages=[{"role": "user", "content": user_message}],
         )
+    except APIStatusError as exc:
+        logger.error("Claude API error (status=%s): %s", exc.status_code, exc.message)
+        raise
     except APIError as exc:
         logger.error("Claude API error: %s", exc)
         raise
