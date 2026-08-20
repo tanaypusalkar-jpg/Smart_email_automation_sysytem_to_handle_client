@@ -10,7 +10,6 @@ import json
 import logging
 from anthropic import Anthropic, APIError
 from tenacity import retry, stop_after_attempt, wait_exponential
-
 from app.config import get_settings
 
 logger = logging.getLogger("email_automation.claude")

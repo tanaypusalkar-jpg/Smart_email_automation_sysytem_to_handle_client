@@ -20,12 +20,22 @@ def _use_temp_db():
     os.environ["DATABASE_URL"] = f"sqlite:///{path}"
     os.environ["GOOGLE_CLIENT_ID"] = ""  # ensure OAuth is off for tests
     yield
-    os.remove(path)
+
+    try:
+        from app.db import engine
+        engine.dispose()
+    except Exception:
+        pass
+
+    try:
+        os.remove(path)
+    except OSError:
+        pass
 
 
 @pytest.fixture(scope="session")
 def client(_use_temp_db):
-    from app.main import app  # imported after env vars are set
+    from app.main import app
 
     with TestClient(app) as c:
         yield c
