@@ -17,6 +17,19 @@ from app.rate_limit import limiter
 from app.db import init_db, get_db
 from app.models_db import EmailLog
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allows requests from your live website URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 settings = get_settings()
 
 logging.basicConfig(
