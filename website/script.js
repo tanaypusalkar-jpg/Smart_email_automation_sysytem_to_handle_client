@@ -42,7 +42,12 @@ async function runTerminal() {
 runTerminal();
 
 // --- Live demo form: calls a locally running API instance ---
-const API_BASE = "http://127.0.0.1:8000";
+// Local dev talks to the local API; any other host uses the deployed API.
+// TODO: replace the placeholder with your real Render API URL before deploying the site.
+const DEPLOYED_API = "https://YOUR-API-NAME.onrender.com";
+const API_BASE = ["localhost", "127.0.0.1", ""].includes(location.hostname)
+  ? "http://127.0.0.1:8000"
+  : DEPLOYED_API;
 const form = document.getElementById("demoForm");
 const output = document.getElementById("output");
 

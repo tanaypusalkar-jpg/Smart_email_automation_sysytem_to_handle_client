@@ -91,20 +91,24 @@ columns later, add Alembic then. Don't add migration tooling before you have any
 Controlled entirely by `GOOGLE_CLIENT_ID` in `.env`:
 
 - **Blank (default):** auth check is skipped. Local dev and tests never need a Google credential.
-- **Set:** every call to `/emails/send` must include `Authorization: Bearer <google-id-token>`,
+- **Set:** `/emails/send`, `/compose/templates` and `/logs` need `Authorization: Bearer <google-id-token>`,
   verified server-side against your Google Cloud OAuth Client ID.
+- **Also set `ALLOWED_EMAILS=you@gmail.com`** (comma-separated). Without it the API refuses every
+  request (fails closed). A valid Google token alone only proves "some Google user", not "you".
 
 To get a client ID: Google Cloud Console → APIs & Services → Credentials → Create OAuth Client ID
 → Web application → add your deployed domain as an authorized origin.
 
 On the website, add Google Identity Services, get an ID token on sign-in, and send it as a
-bearer token with the `/emails/send` fetch call. `/emails/classify` and `/compose` are left
-ungated — they're read-only/side-effect-free, gating them would just add friction for no
-security benefit.
+bearer token with the `/emails/send` fetch call.
+
+`/emails/classify`, `/emails/reply` and `/compose` stay open (the website demo uses them) but
+they spend Claude API credits, so they are rate-limited (`RATE_LIMIT_AI`, `RATE_LIMIT_COMPOSE`)
+and have input size limits.
 
 ## Rate limiting
 
-`RATE_LIMIT_SEND` and `RATE_LIMIT_COMPOSE` in `.env` (slowapi syntax, e.g. `5/minute`). This is
+`RATE_LIMIT_SEND`, `RATE_LIMIT_COMPOSE` and `RATE_LIMIT_AI` in `.env` (slowapi syntax, e.g. `5/minute`). This is
 IP-based and in-memory — fine for a single-instance deploy, resets if the container restarts.
 If you ever run multiple instances behind a load balancer, swap slowapi's storage backend to
 Redis so limits are shared across instances.
@@ -149,8 +153,8 @@ without it, every `docker run` starts with an empty database.
   the file in a new commit does not remove it from history.
 - **Keep `DRY_RUN=true`** on any public deployment until OAuth is actually configured. Without it,
   anyone with the URL can send real email through your SMTP account.
-- **Lock down CORS** in `app/main.py` (`allow_origins`) to your actual deployed website domain
-  once you have one — `"*"` is fine for local dev only.
+- **Lock down CORS** by setting `CORS_ORIGINS=https://your-site.example` in the environment
+  — `*` is fine for local dev only.
 - **Never put API keys in `website/` files.** The frontend has no backend of its own; any key in
   `script.js` is visible to anyone who opens dev tools.
 - **Enable GitHub Dependabot alerts** (Settings → Security) — free, flags known-vulnerable

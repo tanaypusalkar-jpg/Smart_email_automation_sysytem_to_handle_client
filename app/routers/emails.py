@@ -1,20 +1,21 @@
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.auth import require_auth
+from app.config import get_settings
+from app.db import get_db
 from app.models import (
     ClassifyRequest,
     ClassifyResponse,
-    SendRequest,
-    SendResponse,
     ReplyRequest,
     ReplyResponse,
+    SendRequest,
+    SendResponse,
 )
-from app.services import claude_service, email_service, log_service
-from app.db import get_db
-from app.auth import require_auth
-from app.config import get_settings
 from app.rate_limit import limiter
+from app.services import claude_service, email_service, log_service
 
 logger = logging.getLogger("email_automation.router.emails")
 settings = get_settings()
@@ -22,7 +23,8 @@ router = APIRouter(prefix="/emails", tags=["emails"])
 
 
 @router.post("/classify", response_model=ClassifyResponse)
-def classify(payload: ClassifyRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.rate_limit_ai)
+def classify(request: Request, payload: ClassifyRequest, db: Session = Depends(get_db)):
     try:
         result = claude_service.classify_email(payload.subject, payload.body)
         log_service.record(
@@ -42,7 +44,8 @@ def classify(payload: ClassifyRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/reply", response_model=ReplyResponse)
-def reply(payload: ReplyRequest, db: Session = Depends(get_db)):
+@limiter.limit(settings.rate_limit_ai)
+def reply(request: Request, payload: ReplyRequest, db: Session = Depends(get_db)):
     try:
         classification = claude_service.classify_email(
             payload.incoming_subject, payload.incoming_body

@@ -9,6 +9,7 @@ publicly and it starts enforcing real sign-in automatically.
 """
 
 import logging
+
 from fastapi import Header, HTTPException
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
@@ -37,5 +38,16 @@ def require_auth(authorization: str | None = Header(default=None)) -> dict | Non
         # Either way, a protected endpoint fails closed - never open.
         logger.warning("Rejected request: could not verify Google ID token (%s)", exc)
         raise HTTPException(status_code=401, detail="Invalid or unverifiable token.") from exc
+
+    email = str(claims.get("email", "")).lower()
+    allowed = settings.allowed_email_set
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail="OAuth is on but ALLOWED_EMAILS is empty. Set it to your Google email.",
+        )
+    if not claims.get("email_verified") or email not in allowed:
+        logger.warning("Rejected request: %s is not on the allowlist", email)
+        raise HTTPException(status_code=403, detail="This Google account is not allowed.")
 
     return claims

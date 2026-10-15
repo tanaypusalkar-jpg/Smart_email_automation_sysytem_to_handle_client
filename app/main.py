@@ -1,22 +1,25 @@
 import logging
+import threading
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import cast, Callable
+from typing import cast
 
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.auth import require_auth
 from app.config import get_settings
+from app.db import get_db, init_db
 from app.models import HealthResponse, LogEntryOut
-from app.routers import emails, compose
-from app.services import rag_service
-from app.rate_limit import limiter
-from app.db import init_db, get_db
 from app.models_db import EmailLog
+from app.rate_limit import limiter
+from app.routers import compose, emails
+from app.services import rag_service
 
 settings = get_settings()
 
@@ -31,17 +34,18 @@ logger = logging.getLogger("email_automation")
 async def lifespan(_: FastAPI):
     init_db()
 
-    try:
-        rag_service.seed_default_templates()
-    except Exception:
-        # Chroma's default embedder downloads a model file on first use.
-        # On a locked-down network that download can fail. RAG context is
-        # a nice-to-have for /compose, not something that should take the
-        # whole API down.
-        logger.exception(
-            "Could not seed the vector store (RAG context will be unavailable). "
-            "The rest of the API still works."
-        )
+    def _seed() -> None:
+        try:
+            rag_service.seed_default_templates()
+        except Exception:
+            logger.exception(
+                "Could not seed the vector store (RAG context will be unavailable). "
+                "The rest of the API still works."
+            )
+
+    # Chroma downloads an embedding model on first use (~80 MB). Doing that on the
+    # startup path can blow past the host's health-check timeout, so seed in the background.
+    threading.Thread(target=_seed, daemon=True).start()
 
     logger.info(
         "Email Automation System started. dry_run=%s oauth_enabled=%s",
@@ -71,8 +75,8 @@ app.add_middleware(SlowAPIMiddleware)
 # once you have one - see README's security checklist.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=False,  # auth uses a Bearer header, not cookies
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -93,10 +97,14 @@ def health() -> HealthResponse:
 
 
 @app.get("/logs", response_model=list[LogEntryOut])
-def get_logs(limit: int = 20, db: Session = Depends(get_db)) -> list[LogEntryOut]:
+def get_logs(
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    _claims: dict | None = Depends(require_auth),
+) -> list[LogEntryOut]:
     """Recent audit log entries - what got classified/drafted/sent, most recent first."""
     rows = db.execute(
-        select(EmailLog).order_by(EmailLog.created_at.desc()).limit(min(limit, 200))
+        select(EmailLog).order_by(EmailLog.created_at.desc(), EmailLog.id.desc()).limit(max(1, min(limit, 200)))
     ).scalars().all()
     return [
         LogEntryOut(

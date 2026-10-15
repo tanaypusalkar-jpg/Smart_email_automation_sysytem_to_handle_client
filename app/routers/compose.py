@@ -1,12 +1,14 @@
 import logging
-from fastapi import APIRouter, HTTPException, Depends, Request
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.models import ComposeRequest, ComposeResponse, TemplateIn
-from app.services import claude_service, rag_service, log_service
-from app.db import get_db
+from app.auth import require_auth
 from app.config import get_settings
+from app.db import get_db
+from app.models import ComposeRequest, ComposeResponse, TemplateIn
 from app.rate_limit import limiter
+from app.services import claude_service, log_service, rag_service
 
 logger = logging.getLogger("email_automation.router.compose")
 settings = get_settings()
@@ -47,6 +49,14 @@ def compose(request: Request, payload: ComposeRequest, db: Session = Depends(get
 
 
 @router.post("/templates", status_code=201)
-def add_template(payload: TemplateIn):
-    doc_id = rag_service.add_template(payload.title, payload.body, payload.tags)
+@limiter.limit(settings.rate_limit_ai)
+def add_template(
+    request: Request,
+    payload: TemplateIn,
+    _claims: dict | None = Depends(require_auth),
+):
+    try:
+        doc_id = rag_service.add_template(payload.title, payload.body, payload.tags)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"id": doc_id, "status": "stored"}

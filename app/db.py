@@ -8,8 +8,9 @@ instead of writing raw sqlite3 calls.
 """
 
 from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import get_settings
 

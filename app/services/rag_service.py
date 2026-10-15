@@ -7,7 +7,9 @@ drafting a new email.
 """
 
 import logging
+import threading
 import uuid
+
 import chromadb
 
 from app.config import get_settings
@@ -16,18 +18,23 @@ logger = logging.getLogger("email_automation.rag")
 
 settings = get_settings()
 _collection = None
+_lock = threading.Lock()
 
 
 def get_collection():
     global _collection
-    if _collection is None:
-        client = chromadb.PersistentClient(path=settings.vector_db_path)
-        _collection = client.get_or_create_collection(name="email_templates")
-    return _collection
+    with _lock:
+        if _collection is None:
+            client = chromadb.PersistentClient(path=settings.vector_db_path)
+            _collection = client.get_or_create_collection(name="email_templates")
+        return _collection
 
 
 def seed_default_templates() -> None:
     """Populate a few starter templates so the demo works out of the box."""
+    if not settings.rag_enabled:
+        logger.info("RAG disabled (RAG_ENABLED=false) - skipping vector store seed.")
+        return
     collection = get_collection()
     if collection.count() > 0:
         return
@@ -66,6 +73,8 @@ def seed_default_templates() -> None:
 
 
 def add_template(title: str, body: str, tags: list[str]) -> str:
+    if not settings.rag_enabled:
+        raise RuntimeError("RAG is disabled (RAG_ENABLED=false).")
     collection = get_collection()
     doc_id = str(uuid.uuid4())
     collection.add(
@@ -84,6 +93,8 @@ def retrieve_similar(query: str, top_k: int = 2) -> list[str]:
     (e.g. blocked network), composing an email should still work - it just
     won't have retrieved style context.
     """
+    if not settings.rag_enabled:
+        return []
     try:
         collection = get_collection()
         if collection.count() == 0:

@@ -5,6 +5,7 @@ strategy changes later (e.g. move to a queue), only this file changes.
 """
 
 import logging
+
 from sqlalchemy.orm import Session
 
 from app.models_db import EmailLog

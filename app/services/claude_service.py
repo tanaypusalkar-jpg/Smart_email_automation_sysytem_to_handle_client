@@ -8,6 +8,7 @@ copy-pasted into every router.
 
 import json
 import logging
+
 from anthropic import (
     Anthropic,
     APIConnectionError,
@@ -33,7 +34,8 @@ def get_client() -> Anthropic:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set. Add it to your .env file before calling the API."
             )
-        _client = Anthropic(api_key=settings.anthropic_api_key)
+        # max_retries=0: tenacity below is the only retry layer (otherwise 3x3 = 9 calls)
+        _client = Anthropic(api_key=settings.anthropic_api_key, max_retries=0, timeout=30.0)
     return _client
 
 
@@ -66,16 +68,32 @@ def _call_claude(system: str, user_message: str, max_tokens: int = 1024) -> str:
 
 def _extract_json(raw: str) -> dict:
     """Claude sometimes wraps JSON in ```json fences even when told not to. Strip them."""
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.strip("`")
-        if cleaned.lower().startswith("json"):
-            cleaned = cleaned[4:]
+    # Take everything from the first "{" to the last "}" - this survives fences
+    # AND any text Claude adds before/after the JSON.
+    start, end = raw.find("{"), raw.rfind("}")
+    cleaned = raw[start : end + 1] if start != -1 and end > start else raw
     try:
         return json.loads(cleaned.strip())
     except json.JSONDecodeError as exc:
         logger.error("Failed to parse Claude JSON output: %s | raw=%s", exc, raw)
         raise ValueError(f"Claude did not return valid JSON: {exc}") from exc
+
+
+_ALLOWED = {
+    "category": ({"sales", "support", "spam", "personal", "other"}, "other"),
+    "priority": ({"low", "medium", "high", "urgent"}, "medium"),
+    "sentiment": ({"positive", "neutral", "negative"}, "neutral"),
+}
+
+
+def _normalise_classification(data: dict) -> dict:
+    """Lower-case values and fall back to a safe default instead of failing the request."""
+    out = {}
+    for key, (allowed, default) in _ALLOWED.items():
+        value = str(data.get(key, "")).strip().lower()
+        out[key] = value if value in allowed else default
+    out["reasoning"] = str(data.get("reasoning", "")).strip()
+    return out
 
 
 def classify_email(subject: str, body: str) -> dict:
@@ -89,7 +107,7 @@ def classify_email(subject: str, body: str) -> dict:
     )
     user_message = f"Subject: {subject}\n\nBody:\n{body}"
     raw = _call_claude(system, user_message, max_tokens=300)
-    return _extract_json(raw)
+    return _normalise_classification(_extract_json(raw))
 
 
 def draft_email(
