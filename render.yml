@@ -1,0 +1,33 @@
+services:
+  # 1. Backend API Service
+  - type: web
+    name: smart-email-api
+    env: python
+    region: ohio # Choose your preferred region
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DRY_RUN
+        value: "False"
+      - key: OAUTH_ENABLED
+        value: "True" # Or false depending on your production config
+
+  # 2. Frontend Website Service
+  - type: web
+    name: smart-email-website
+    env: python
+    region: ohio
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python website/app.py # Adjust to your actual startup command/file
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: API_BASE_URL
+        fromService:
+          type: web
+          name: smart-email-api
+          property: url
