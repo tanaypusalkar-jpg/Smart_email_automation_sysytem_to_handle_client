@@ -15,3 +15,19 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+
+# Generated application data
+app/data/chroma_store/
+app/data/*.db
+app/data/*.sqlite
+app/data/*.sqlite3
+
+# Development-only files
+tests/
+website/
+.vscode/
+.idea/
+*.zip
+*.egg-info/
+dist/
+build/
